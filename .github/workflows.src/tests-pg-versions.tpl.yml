@@ -65,7 +65,13 @@ jobs:
     - name: Trust pgvector extension
       uses: docker://docker
       with:
-        args: docker exec postgres sed -i $a\trusted=true /usr/share/postgresql/${{ matrix.postgres-version }}/extension/vector.control
+        args:
+          - docker
+          - exec
+          - postgres
+          - bash
+          - -c
+          - echo trusted = true >> /usr/share/postgresql/*/extension/vector.control
 
     <<- restore_cache() >>
 

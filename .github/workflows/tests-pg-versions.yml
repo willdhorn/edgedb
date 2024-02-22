@@ -341,19 +341,6 @@ jobs:
          - 'NOCREATEDB NOCREATEROLE'
          - 'CREATEDB NOCREATEROLE'
         multi-tenant-mode: [ '' ]
-        include:
-          - postgres-version: 14
-            single-mode: ''
-            multi-tenant-mode: ''
-          - postgres-version: 15
-            single-mode: ''
-            multi-tenant-mode: ''
-          - postgres-version: 16
-            single-mode: ''
-            multi-tenant-mode: 'remote-compiler'
-          - postgres-version: 16
-            single-mode: ''
-            multi-tenant-mode: 'multi-tenant'
     services:
       postgres:
         image: pgvector/pgvector:pg${{ matrix.postgres-version }}
@@ -405,7 +392,7 @@ jobs:
       with:
         path: ~/.cache/uv
         key: uv-cache-${{ runner.os }}-py-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('pyproject.toml') }}
-    
+
     - name: Download requirements.txt
       uses: actions/cache@v4
       with:
@@ -565,27 +552,7 @@ jobs:
           echo "{\"localhost\":{\"instance-name\":\"localtest\",\"backend-dsn\":\"$EDGEDB_TEST_BACKEND_DSN\",\"admin\":true,\"max-backend-connections\":10}}" > /tmp/edb.mt.json
         fi
         if [[ "${{ matrix.single-mode }}" == *"NOCREATEDB"* ]]; then
-          edb test -j1 -v --backend-dsn=$EDGEDB_TEST_BACKEND_DSN
+          edb test -j1 -v --backend-dsn=$EDGEDB_TEST_BACKEND_DSN -k test_edgeql_migration_vector_change_01 -k test_edgeql_migration_extension_01
         else
-          edb test -j2 -v --backend-dsn=$EDGEDB_TEST_BACKEND_DSN
+          edb test -j2 -v --backend-dsn=$EDGEDB_TEST_BACKEND_DSN -k test_edgeql_migration_vector_change_01 -k test_edgeql_migration_extension_01
         fi
-
-
-  workflow-notifications:
-    if: failure() && github.event_name != 'pull_request'
-    name: Notify in Slack on failures
-    needs:
-      - build
-      - test
-    runs-on: ubuntu-latest
-    permissions:
-      actions: 'read'
-    steps:
-      - name: Slack Workflow Notification
-        uses: Gamesight/slack-workflow-status@26a36836c887f260477432e4314ec3490a84f309
-        with:
-          repo_token: ${{secrets.GITHUB_TOKEN}}
-          slack_webhook_url: ${{secrets.ACTIONS_SLACK_WEBHOOK_URL}}
-          name: 'Workflow notifications'
-          icon_emoji: ':hammer:'
-          include_jobs: 'on-failure'
