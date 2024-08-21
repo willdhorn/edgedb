@@ -827,9 +827,8 @@ class ScopeTreeNode:
     ]:
         """Find the visible node with the given *path_id*."""
         namespaces: Set[pathid.Namespace] = set()
-        finfo = None
         found = None
-
+        nodes: List[ScopeTreeNode] = []
         for node, ans in self.ancestors_and_namespaces:
             if (node.path_id is not None
                     and _paths_equal(node.path_id, path_id, namespaces)):
@@ -848,20 +847,24 @@ class ScopeTreeNode:
             namespaces |= ans
 
             if node is not self:
-                ans_finfo = node.fence_info
-                if any(
-                    _paths_equal(path_id, wl, namespaces)
-                    for wl in node.factoring_allowlist
-                ):
-                    ans_finfo = FenceInfo(
-                        unnest_fence=ans_finfo.unnest_fence,
-                        factoring_fence=False,
-                    )
+                nodes.append(node)
 
-                if finfo is None:
-                    finfo = ans_finfo
-                else:
-                    finfo = finfo | ans_finfo
+        finfo = None
+        for node in nodes:
+            ans_finfo = node.fence_info
+            if any(
+                _paths_equal(path_id, wl, namespaces)
+                for wl in node.factoring_allowlist
+            ):
+                ans_finfo = FenceInfo(
+                    unnest_fence=ans_finfo.unnest_fence,
+                    factoring_fence=False,
+                )
+
+            if finfo is None:
+                finfo = ans_finfo
+            else:
+                finfo = finfo | ans_finfo
 
         if found and found.is_group and not allow_group:
             found = None
