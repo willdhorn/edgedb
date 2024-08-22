@@ -1393,7 +1393,7 @@ def _compile_uncompiled_dml(
         ql_aliases.append(
             qlast.AliasedExpr(
                 alias=name,
-                expr=qlast.DetachedExpr(expr=stmt.ql_stmt),
+                expr=stmt.ql_stmt,
             )
         )
         ql_stmt_shape.append(
@@ -1665,7 +1665,7 @@ def _resolve_dml_value_rel(compiled_dml: context.CompiledDML, *, ctx: Context):
             from_clause=[
                 pgast.RangeSubselect(
                     subquery=val_rel,
-                    alias=pgast.Alias(aliasname=val_table.alias)
+                    alias=pgast.Alias(aliasname=val_table.alias),
                 )
             ],
             target_list=value_target_list,
