@@ -419,7 +419,7 @@ def _uncompile_insert_object_stmt(
         external_rels={
             value_id: (
                 value_rel,
-                (pgce.PathAspect.SOURCE, pgce.PathAspect.IDENTITY),
+                (pgce.PathAspect.SOURCE,),
             )
         },
         early_result=context.CompiledDML(
@@ -688,7 +688,7 @@ def _uncompile_insert_pointer_stmt(
         external_rels={
             source_id: (
                 value_rel,
-                (pgce.PathAspect.SOURCE, pgce.PathAspect.IDENTITY),
+                (pgce.PathAspect.SOURCE,),
             )
         },
         early_result=context.CompiledDML(
@@ -918,7 +918,7 @@ def _uncompile_delete_object_stmt(
         external_rels={
             value_id: (
                 value_rel,
-                (pgce.PathAspect.SOURCE, pgce.PathAspect.IDENTITY),
+                (pgce.PathAspect.SOURCE,),
             )
         },
         early_result=context.CompiledDML(
@@ -1110,7 +1110,7 @@ def _uncompile_delete_pointer_stmt(
         external_rels={
             source_id: (
                 value_rel,
-                (pgce.PathAspect.SOURCE, pgce.PathAspect.IDENTITY),
+                (pgce.PathAspect.SOURCE,),
             )
         },
         early_result=context.CompiledDML(
@@ -1365,7 +1365,7 @@ def _uncompile_update_object_stmt(
         external_rels={
             value_id: (
                 value_rel,
-                (pgce.PathAspect.SOURCE, pgce.PathAspect.IDENTITY),
+                (pgce.PathAspect.SOURCE,),
             )
         },
         early_result=context.CompiledDML(
