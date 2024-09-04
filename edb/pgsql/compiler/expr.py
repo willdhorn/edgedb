@@ -105,6 +105,14 @@ def _compile_set_impl(
                 and not ctx.env.ignore_object_shapes):
             _compile_shape(ir_set, ir_set.shape, ctx=ctx)
 
+    elif isinstance(ir_set.expr, irast.InlinedParameter):
+        # InlinedParameter will already be compiled in process_set_as_func_expr,
+        # Just place the path value here.
+        value = ctx.inlined_args[ir_set.expr.arg_key]
+        pathctx.put_path_value_var_if_not_exists(
+            ctx.rel, ir_set.path_id, value
+        )
+
     elif ir_set.path_scope_id is not None and not is_toplevel:
         # This Set is behind a scope fence, so compute it
         # in a fenced context.

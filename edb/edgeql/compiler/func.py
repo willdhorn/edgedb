@@ -37,6 +37,7 @@ from typing import (
 )
 
 from edb import errors
+from edb.common import ast
 from edb.common import parsing
 from edb.common.typeutils import not_none
 
@@ -45,6 +46,7 @@ from edb.ir import staeval
 from edb.ir import utils as irutils
 
 from edb.schema import constraints as s_constr
+from edb.schema import delta as sd
 from edb.schema import functions as s_func
 from edb.schema import modules as s_mod
 from edb.schema import name as sn
@@ -196,6 +198,32 @@ def compile_FunctionCall(
     func = matched_call.func
     assert isinstance(func, s_func.Function)
 
+    inline_func = None
+    if (
+        func.get_language(ctx.env.schema) == qlast.Language.EdgeQL
+        and func.get_shortname(ctx.env.schema) in [
+            sn.QualName('default', 'one'),
+            sn.QualName('default', 'id'),
+            sn.QualName('default', 'inc'),
+        ]
+    ):
+        inline_func = s_func.compile_function(
+            schema=ctx.env.schema,
+            context=sd.CommandContext(
+                # Probably not correct. Need to store modaliases while compiling
+                # functions?
+                modaliases=ctx.modaliases,
+                schema=ctx.env.schema,
+            ),
+            body=not_none(func.get_nativecode(ctx.env.schema)),
+            func_name=func.get_name(ctx.env.schema),
+            params=func.get_params(ctx.env.schema),
+            language=not_none(func.get_language(ctx.env.schema)),
+            return_type=func.get_return_type(ctx.env.schema),
+            return_typemod=func.get_return_typemod(ctx.env.schema),
+            track_schema_ref_exprs=False,
+        )
+
     # Record this node in the list of potential DML expressions.
     if func.get_has_dml(env.schema):
         ctx.env.dml_exprs.append(expr)
@@ -246,7 +274,7 @@ def compile_FunctionCall(
 
     matched_func_initial_value = func.get_initial_value(env.schema)
 
-    final_args = finalize_args(
+    final_args, param_name_to_arg_key = finalize_args(
         matched_call,
         guessed_typemods=typemods,
         is_polymorphic=is_polymorphic,
@@ -345,6 +373,12 @@ def compile_FunctionCall(
     # Apply special function handling
     if special_func := _SPECIAL_FUNCTIONS.get(str(func_name)):
         res = special_func(fcall, ctx=ctx)
+    elif inline_func:
+        res = fcall
+        inline_func_expr = inline_func.irast.expr.expr
+        res.body = ArgumentInliner(param_name_to_arg_key).visit(
+            inline_func_expr
+        )
     else:
         res = fcall
 
@@ -362,6 +396,25 @@ def compile_FunctionCall(
 
     ir_set = setgen.ensure_set(res, typehint=rtype, path_id=path_id, ctx=ctx)
     return stmt.maybe_add_view(ir_set, ctx=ctx)
+
+
+class ArgumentInliner(ast.NodeTransformer):
+
+    def __init__(
+        self,
+        param_name_to_arg_key: dict[str, int | str],
+    ) -> None:
+        super().__init__()
+        self.param_name_to_arg_key = param_name_to_arg_key
+
+    def visit_Parameter(self, node: irast.Parameter) -> irast.Base:
+        if node.name in self.param_name_to_arg_key:
+            return irast.InlinedParameter(
+                arg_key=self.param_name_to_arg_key[node.name],
+                required=node.required,
+                is_global=node.is_global,
+            )
+        return node
 
 
 class _SpecialCaseFunc(Protocol):
@@ -618,7 +671,7 @@ def compile_operator(
         matched_rtype.is_polymorphic(env.schema)
     )
 
-    final_args = finalize_args(
+    final_args, _ = finalize_args(
         matched_call,
         actual_typemods=actual_typemods,
         guessed_typemods=typemods,
@@ -856,9 +909,10 @@ def finalize_args(
     guessed_typemods: Dict[Union[int, str], ft.TypeModifier],
     is_polymorphic: bool = False,
     ctx: context.ContextLevel,
-) -> Dict[Union[int, str], irast.CallArg]:
+) -> tuple[dict[int | str, irast.CallArg], dict[str, int | str]]:
 
-    args: Dict[Union[int, str], irast.CallArg] = {}
+    args: dict[int | str, irast.CallArg] = {}
+    param_name_to_arg: dict[str, int | str] = {}
     position_index: int = 0
 
     for i, barg in enumerate(bound_call.args):
@@ -972,14 +1026,16 @@ def finalize_args(
 
         arg = irast.CallArg(expr=arg_val, expr_type_path_id=arg_type_path_id,
             is_default=barg.is_default, param_typemod=param_mod)
+        param_shortname = param.get_parameter_name(ctx.env.schema)
         if param_kind is ft.ParameterKind.NamedOnlyParam:
-            param_shortname = param.get_parameter_name(ctx.env.schema)
             args[param_shortname] = arg
+            param_name_to_arg[param_shortname] = param_shortname
         else:
             args[position_index] = arg
+            param_name_to_arg[param_shortname] = position_index
             position_index += 1
 
-    return args
+    return args, param_name_to_arg
 
 
 @_special_case('ext::ai::search')

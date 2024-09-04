@@ -335,6 +335,10 @@ class CompilerContextLevel(compiler.ContextLevel):
     #: needed by DML.
     shapes_needed_by_dml: Set[irast.Set]
 
+    #: When a function has an inlined body, the compiled arguments are
+    #: subsituted in during pg compilation.
+    inlined_args: dict[int | str, pgast.BaseExpr]
+
     def __init__(
         self,
         prevlevel: Optional[CompilerContextLevel],
@@ -388,6 +392,8 @@ class CompilerContextLevel(compiler.ContextLevel):
 
             self.trigger_mode = False
 
+            self.inlined_args = {}
+
         else:
             self.env = prevlevel.env
             self.argmap = prevlevel.argmap
@@ -428,6 +434,8 @@ class CompilerContextLevel(compiler.ContextLevel):
             self.external_rels = prevlevel.external_rels
 
             self.trigger_mode = prevlevel.trigger_mode
+
+            self.inlined_args = prevlevel.inlined_args
 
             if mode is ContextSwitchMode.SUBSTMT:
                 if self.pending_query is not None:

@@ -886,6 +886,20 @@ class Parameter(ImmutableExpr):
         return self.is_implicit_global is not None
 
 
+class InlinedParameter(ImmutableBase):
+
+    # Parameter is used for both function parameters and runtime parameters.
+    # If a function is inlined in compile_FunctionCall, this is used to
+    # specify the function's parameters.
+
+    # During function compilation, arguments are converted from names to either
+    # int for positional argument or str for named argument.
+    arg_key: int | str
+
+    required: bool
+    is_global: bool
+
+
 class TupleElement(ImmutableBase):
 
     name: str

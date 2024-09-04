@@ -2268,7 +2268,7 @@ def process_set_as_oper_expr(
     # XXX: do we need a subrel?
     with ctx.new() as newctx:
         newctx.expr_exposed = False
-        args = _compile_call_args(ir_set, ctx=newctx)
+        args, _ = _compile_call_args(ir_set, ctx=newctx)
         oper_expr = exprcomp.compile_operator(ir_set.expr, args, ctx=newctx)
 
     pathctx.put_path_value_var_if_not_exists(
@@ -3355,7 +3355,7 @@ def _compile_call_args(
     skip: Collection[int] = (),
     no_subquery_args: bool = False,
     ctx: context.CompilerContextLevel,
-) -> List[pgast.BaseExpr]:
+) -> tuple[list[pgast.BaseExpr], dict[int | str, int]]:
     """
     Compiles function call arguments, whose index is not in `skip`.
     """
@@ -3364,6 +3364,7 @@ def _compile_call_args(
     assert isinstance(expr, irast.Call)
 
     args = []
+    arg_indexes = {}
 
     if isinstance(expr, irast.FunctionCall) and expr.global_args:
         for glob_arg in expr.global_args:
@@ -3399,6 +3400,7 @@ def _compile_call_args(
         else:
             arg_ref = dispatch.compile(ir_arg.expr, ctx=ctx)
             arg_ref = output.output_as_value(arg_ref, env=ctx.env)
+        arg_indexes[ir_key] = len(args)
         args.append(arg_ref)
         _compile_arg_null_check(expr, ir_arg, arg_ref, typemod, ctx=ctx)
 
@@ -3434,7 +3436,7 @@ def _compile_call_args(
 
         args.append(pgast.VariadicArgument(expr=var))
 
-    return args
+    return args, arg_indexes
 
 
 def process_set_as_func_enumerate(
@@ -3450,7 +3452,7 @@ def process_set_as_func_enumerate(
     with ctx.subrel() as newctx:
         with newctx.new() as newctx2:
             newctx2.expr_exposed = False
-            args = _compile_call_args(inner_func_set, ctx=newctx2)
+            args, _ = _compile_call_args(inner_func_set, ctx=newctx2)
         func_name = exprcomp.get_func_call_backend_name(inner_func, ctx=newctx)
 
         set_expr = _process_set_func_with_ordinality(
@@ -3475,10 +3477,15 @@ def process_set_as_func_expr(
 
     with ctx.subrel() as newctx:
         newctx.expr_exposed = False
-        args = _compile_call_args(ir_set, ctx=newctx)
+        args, arg_keys = _compile_call_args(ir_set, ctx=newctx)
 
         if expr.body is not None:
+            newctx.inlined_args = {
+                name: args[index]
+                for name, index in arg_keys.items()
+            }
             set_expr = dispatch.compile(expr.body, ctx=newctx)
+
         else:
             name = exprcomp.get_func_call_backend_name(expr, ctx=newctx)
 
@@ -4148,7 +4155,7 @@ def _process_set_as_object_search(
     # Also, disable subquery args. ai::search needs it for its
     # scoping effects, but we don't need to use it here, since
     # it can cause the ai search to duplicate arguments.
-    args_pg = _compile_call_args(
+    args_pg, _ = _compile_call_args(
         ir_set, skip={0}, no_subquery_args=True, ctx=ctx)
 
     with ctx.subrel() as newctx:
